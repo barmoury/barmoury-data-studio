@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barmoury Data Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="C:\Users\iamth\Documents\OPEN_SOURCE\KYOFUUC\kyofuuc-node\browser_dist\kyofuuc.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e5e7eb;
+            border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #d1d5db;
+        }
+
+        .sidebar-transition {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        .animate-pop {
+            animation: pop 0.2s ease-out;
+        }
+
+        @keyframes pop {
+            0% {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        #main-app-container.hidden {
+            display: none;
+        }
+
+        .panel-transition {
+            transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out;
+        }
+
+        /* Loader Animation */
+        .loader-ring {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2563eb;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-[#fcfcfd] text-[#333238] h-screen overflow-hidden">
+
+    <!-- Loading Screen (Shown on Entry) -->
+    <div id="loadingScreen" class="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-white">
+        <div class="relative flex items-center justify-center mb-8">
+            <div class="absolute w-24 h-24 bg-blue-600/10 rounded-full animate-ping"></div>
+            <div
+                class="relative w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-200">
+                <i data-lucide="database" class="w-8 h-8"></i>
+            </div>
+        </div>
+        <h1 class="text-xl font-black text-gray-800 tracking-tighter mb-4">Barmoury Data Studio</h1>
+        <div class="flex items-center gap-3 text-gray-400 font-medium text-sm">
+            <div class="loader-ring"></div>
+            <span>Initializing environment...</span>
+        </div>
+    </div>
+
+    <!-- Connection Setup Dialog -->
+    <div id="setupModal" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-pop border border-gray-100">
+            <div class="p-8">
+                <div
+                    class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-100">
+                    <i data-lucide="plug-2" class="w-6 h-6"></i>
+                </div>
+                <h2 class="text-2xl font-black text-gray-800 tracking-tight mb-2">Connection Setup</h2>
+                <p class="text-sm text-gray-500 mb-8">Configure your database API endpoints and security headers to
+                    begin.</p>
+
+                <form id="setup-form" onsubmit="handleSetup(event)" class="space-y-5">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Query
+                            Route</label>
+                        <input id="setup-query-route" type="text" placeholder="/api/v1/query" required
+                            class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-medium text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Post
+                            Message Key</label>
+                        <input id="setup-post-message-key" type="text" placeholder="e.g. secret_app_key_123"
+                            class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-medium text-sm">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Databases</label>
+                        <input id="setup-databases" type="text" placeholder="e.g. schema1,scheme2. leave empty for all"
+                            class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-medium text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Custom
+                            HTTP Headers (JSON)</label>
+                        <textarea id="setup-headers" placeholder='{"Authorization": "Bearer ..."}'
+                            class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-mono text-xs h-60 resize-none">{}</textarea>
+                    </div>
+
+                    <div class="pt-4 flex gap-3">
+                        <button type="button" id="setup-cancel-btn" onclick="toggleModal('setupModal', false)"
+                            class="hidden flex-1 py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-2xl">Cancel</button>
+                        <button type="submit"
+                            class="flex-[2] py-4 bg-gray-900 text-white rounded-2xl font-black text-sm shadow-xl hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                            Initialize Studio <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App UI -->
+    <div id="main-app-container" class="hidden h-full">
+        <div class="flex h-full">
+            <!-- Sidebar -->
+            <aside id="sidebar"
+                class="sidebar-transition w-90 bg-white border-r border-gray-200 flex flex-col shrink-0 relative overflow-hidden">
+                <div class="h-16 flex items-center px-6 border-b border-gray-100 gap-3 shrink-0">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                        <i data-lucide="database" class="w-5 h-5"></i>
+                    </div>
+                    <span class="sidebar-text font-black text-lg tracking-tighter whitespace-nowrap">Barmoury Data
+                        Studio</span>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    <div class="flex items-center justify-between mb-4 px-2 sidebar-text">
+                        <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Databases</span>
+                    </div>
+                    <div id="schema-tree" class="space-y-2"></div>
+                </div>
+
+                <div class="p-4 border-t border-gray-100 shrink-0 space-y-2">
+                    <button onclick="openSettings()"
+                        class="sidebar-text w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-all">
+                        <i data-lucide="settings" class="w-4 h-4"></i> Settings
+                    </button>
+                    <div class="bg-gray-50 rounded-xl p-4 flex items-center gap-4 sidebar-text">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div>
+                            <p class="text-[10px] font-black uppercase text-gray-400">Connected</p>
+                            <p id="footer-connection-status" class="text-[11px] font-bold text-gray-700 truncate w-32">
+                                localhost:3306</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 flex flex-col overflow-hidden">
+                <header
+                    class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0 z-10">
+                    <div class="flex items-center gap-4 min-w-0">
+                        <button onclick="toggleSidebar()"
+                            class="p-2 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors">
+                            <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
+                        </button>
+                        <div class="flex items-center gap-2 text-sm text-gray-400 truncate">
+                            <span id="header-schema" class="font-medium truncate">...</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4 shrink-0"></i>
+                            <span class="font-bold text-gray-900 flex items-center gap-2 truncate">
+                                <i data-lucide="table" class="text-blue-500 w-4 h-4 shrink-0"></i>
+                                <span id="header-table" class="truncate">...</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 shrink-0">
+                        <button id="add-row-btn" onclick="openRowModal(null)"
+                            class="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-black transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Add Row
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Toolbar -->
+                <div
+                    class="h-12 bg-[#f8f9fb] border-b border-gray-200 flex items-center justify-between px-8 shrink-0 overflow-x-auto">
+                    <div class="flex items-center gap-6 whitespace-nowrap">
+                        <button onclick="togglePanel('filter-panel')"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-gray-900 tracking-widest transition-colors">
+                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
+                        </button>
+                        <button onclick="togglePanel('sort-panel')"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-gray-900 tracking-widest transition-colors">
+                            <i data-lucide="arrow-up-down" class="w-3.5 h-3.5"></i> Sort
+                        </button>
+                        <button onclick="togglePanel('columns-panel')"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-gray-900 tracking-widest transition-colors">
+                            <i data-lucide="columns" class="w-3.5 h-3.5"></i> Columns
+                        </button>
+                        <button onclick="renderTable()"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-gray-900 tracking-widest"><i
+                                data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh</button>
+
+                        <div class="h-4 w-px bg-gray-200 mx-2"></div>
+
+                        <button onclick="confirmTruncate()"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-rose-500 tracking-widest transition-colors">
+                            <i data-lucide="eraser" class="w-3.5 h-3.5"></i> Truncate
+                        </button>
+                        <button onclick="confirmDrop()"
+                            class="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 hover:text-rose-600 tracking-widest transition-colors">
+                            <i data-lucide="trash" class="w-3.5 h-3.5"></i> Drop Table
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-4 shrink-0">
+                        <span id="record-count"
+                            class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">...</span>
+                        <button
+                            class="p-1.5 hover:bg-white rounded-md text-gray-400 border border-transparent hover:border-gray-200"><i
+                                data-lucide="download" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+
+                <!-- Panels (Filter, Sort, Columns) -->
+                <div id="filter-panel"
+                    class="hidden bg-white border-b border-gray-200 p-6 shadow-inner overflow-hidden">
+                    <div class="max-w-5xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Query Filters
+                            </h4>
+                        </div>
+                        <div id="filter-rows-container" class="space-y-3"></div>
+                        <div class="flex items-center gap-3 mt-6">
+                            <label class="text-[9px] font-black uppercase text-gray-400">Fetch Limit</label>
+                            <input id="filter-limit" type="number" value="100" min="1" step="1"
+                                class="w-20 p-1.5 bg-gray-50 border border-gray-100 rounded text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/10">
+                        </div>
+                        <div class="mt-6 flex items-center gap-4">
+                            <button onclick="addFilterRow()"
+                                class="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                                <i data-lucide="plus-circle" class="w-4 h-4 text-blue-500"></i> Add Condition
+                            </button>
+                            <button onclick="applyFilters()"
+                                class="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl text-xs font-black shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95">Apply</button>
+                            <button onclick="clearFilters()"
+                                class="text-xs font-bold text-gray-400 hover:text-rose-500 transition-colors">Clear
+                                All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sort-panel" class="hidden bg-white border-b border-gray-200 p-6 shadow-inner overflow-hidden">
+                    <div class="max-w-5xl">
+                        <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4">Order By</h4>
+                        <div id="sort-rows-container" class="space-y-3"></div>
+                        <div class="mt-6 flex items-center gap-4">
+                            <button onclick="addSortRow()"
+                                class="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                                <i data-lucide="plus-circle" class="w-4 h-4 text-purple-500"></i> Add Sort Level
+                            </button>
+                            <button onclick="applySorts()"
+                                class="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-xl text-xs font-black shadow-lg hover:bg-black transition-all active:scale-95">Apply
+                                Sorting</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="columns-panel"
+                    class="hidden bg-white border-b border-gray-200 p-6 shadow-inner overflow-hidden">
+                    <div class="">
+                        <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4">Visible Fields
+                        </h4>
+                        <div id="column-checkboxes-container" class="flex flex-wrap gap-4"></div>
+                        <div class="mt-6 flex items-center gap-4">
+                            <button onclick="selectAllColumns(true)"
+                                class="text-xs font-bold text-blue-600 hover:underline">Select All</button>
+                            <button onclick="selectAllColumns(false)"
+                                class="text-xs font-bold text-gray-400 hover:text-rose-500">Deselect All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Grid -->
+                <div id="grid-container" class="flex-1 overflow-auto bg-white custom-scrollbar"></div>
+
+                <!-- Footer -->
+                <footer
+                    class="h-10 bg-white border-t border-gray-200 flex items-center justify-between px-8 text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
+                    <div class="flex items-center gap-6">
+                        <button onclick="togglePanel('query-log-panel')"
+                            class="flex items-center gap-2 text-blue-500 hover:text-blue-700 transition-colors">
+                            <i data-lucide="terminal" class="w-3.5 h-3.5"></i> <span id="log-count-text">Query Log
+                                (0)</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <input id="show-sql-checkbox" type="checkbox"
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span class="group-hover:text-gray-700 transition-colors">Preview All SQL Before
+                                Execute</span>
+                        </label>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Query Log Sidebar/Panel -->
+    <div id="query-log-panel"
+        class="hidden fixed bottom-10 left-8 w-96 bg-gray-900 text-gray-300 rounded-t-2xl shadow-2xl z-[100] border border-white/10 animate-pop overflow-hidden">
+        <div class="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-black/20">
+            <span class="text-[9px] font-black uppercase tracking-widest">Session Query History (Last 10)</span>
+            <button onclick="togglePanel('query-log-panel')" class="p-1 hover:bg-white/10 rounded"><i data-lucide="x"
+                    class="w-3 h-3"></i></button>
+        </div>
+        <div id="query-log-list"
+            class="max-h-80 overflow-y-auto p-2 font-mono text-[10px] space-y-2 custom-scrollbar bg-gray-900/50">
+            <!-- Logs injected here -->
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="rowModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-pop">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between font-bold">
+                <span id="row-modal-title">Edit Record</span>
+                <button onclick="toggleModal('rowModal', false)"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div id="row-form-fields"
+                    class="grid grid-cols-1 gap-4 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar"></div>
+                <div class="flex items-center gap-3 pt-4 border-t border-gray-50">
+                    <button onclick="toggleModal('rowModal', false)"
+                        class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-800">Cancel</button>
+                    <button id="row-modal-execute-btn"
+                        class="flex-1 py-3 bg-blue-600 text-white rounded-xl text-sm font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i> <span id="row-modal-btn">Save</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Universal Confirm Modal (Updated for SQL Preview) -->
+    <div id="confirmModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-pop">
+            <div class="p-6 text-center">
+                <div class="flex justify-center mb-4"><i id="confirm-icon" data-lucide="alert-triangle"
+                        class="w-8 h-8 text-rose-500"></i></div>
+                <h3 id="confirm-title" class="text-lg font-bold text-gray-800 mb-2">Confirm Action</h3>
+                <div id="confirm-sql-wrapper" class="hidden mb-4 text-left">
+                    <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Generated SQL
+                        Statement</p>
+                    <pre id="confirm-sql-box"
+                        class="bg-gray-900 text-emerald-400 p-4 rounded-xl font-mono text-[11px] overflow-x-auto whitespace-pre-wrap leading-relaxed border border-white/5"></pre>
+                </div>
+                <p id="confirm-message" class="text-sm text-gray-600 mb-6"></p>
+                <div class="flex gap-3">
+                    <button onclick="toggleModal('confirmModal', false)"
+                        class="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl">Cancel</button>
+                    <button id="confirm-execute-btn"
+                        class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-sm font-black hover:bg-rose-700 transition-all">Confirm
+                        Execution</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Executing Query Loader Modal -->
+    <div id="executingModal" class="hidden fixed inset-0 z-[250] flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 text-center border border-gray-100 animate-pop">
+            <div class="flex justify-center mb-6">
+                <div class="loader-ring w-12 h-12 border-4 border-[#f3f3f3] border-t-[#2563eb]"></div>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Executing Query</h3>
+            <p class="text-sm text-gray-500">Processing request and updating database cluster...</p>
+        </div>
+    </div>
+
+    <!-- Alert Popup -->
+    <div id="alertPopup" class="hidden fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/40">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 text-center border border-gray-100 animate-pop">
+            <div class="flex justify-center mb-4"><i data-lucide="alert-circle" class="w-8 h-8 text-rose-500"></i></div>
+            <h3 id="alert-title" class="text-lg font-bold text-gray-800 mb-2">Error</h3>
+            <p id="alert-message" class="text-sm text-gray-600 mb-6"></p>
+            <button id="alertPopupAckButton"
+                class="w-full py-2.5 bg-gray-900 text-white rounded-lg font-bold text-sm hover:bg-black transition-all">Acknowledge</button>
+        </div>
+    </div>
+
+    <script>
+        const DATABASES = {};
+
+        let queryLogs = [];
+        let allColumns = [];
+        let activeSorts = [];
+        let tableColumns = [];
+        let currentTable = '';
+        let editingData = null;
+        let activeFilters = [];
+        let hiddenColumns = [];
+        let currentSchema = '';
+        let sidebarCollapsed = false;
+
+        let CONFIG = { databases: [], queryRoute: '', postMessageKey: '', headers: {} };
+
+        async function handleSetup(event) {
+            if (event) event.preventDefault();
+            CONFIG.queryRoute = document.getElementById('setup-query-route').value;
+            CONFIG.postMessageKey = document.getElementById('setup-post-message-key').value;
+            CONFIG.databases = document.getElementById('setup-databases').value.split(",").filter((s) => !!s);
+            try {
+                CONFIG.headers = JSON.parse(document.getElementById('setup-headers').value || '{}');
+            } catch (e) {
+                showAlert('Invalid JSON', 'Headers must be a valid JSON object.');
+                return;
+            }
+            toggleModal('loadingScreen', true);
+            executeQuery("SHOW DATABASES", (data) => {
+                data = data.filter((schema) => !CONFIG.databases?.length || CONFIG.databases.includes(schema));
+                if (data.length > 0) {
+                    currentSchema = data[0];
+                    for (const schema of data) {
+                        DATABASES[schema] = [];
+                    }
+                }
+                document.getElementById('setupModal').classList.add('hidden');
+                document.getElementById('main-app-container').classList.remove('hidden');
+                document.getElementById('setup-cancel-btn').classList.remove('hidden');
+                document.getElementById("footer-connection-status").innerText = (new URL(CONFIG.queryRoute)).hostname;
+                init();
+            }, (error, responseBody) => {
+                showAlert("Initialization error: " + error, responseBody, () => {
+                    toggleModal('setupModal', true);
+                });
+            }, () => {
+                toggleModal('loadingScreen', false);
+            });
+        }
+
+        function init() {
+            renderSidebar();
+            renderTable();
+            lucide.createIcons();
+        }
+
+        function openSettings() {
+            document.getElementById('setup-query-route').value = CONFIG.queryRoute;
+            document.getElementById('setup-databases').value = CONFIG.databases.join(",");
+            document.getElementById('setup-post-message-key').value = CONFIG.postMessageKey;
+            document.getElementById('setup-headers').value = JSON.stringify(CONFIG.headers, null, 2);
+            toggleModal('setupModal', true);
+        }
+
+        function toggleSidebar() {
+            sidebarCollapsed = !sidebarCollapsed;
+            const sidebar = document.getElementById('sidebar');
+            const icon = document.getElementById('sidebar-toggle-icon');
+            sidebar.className = `sidebar-transition bg-white border-r border-gray-200 flex flex-col shrink-0 relative overflow-hidden ${sidebarCollapsed ? 'w-0' : 'w-72'}`;
+            icon.setAttribute('data-lucide', sidebarCollapsed ? 'panel-left-open' : 'panel-left-close');
+            lucide.createIcons();
+        }
+
+        function toggleModal(id, show) {
+            const el = document.getElementById(id);
+            if (show) el.classList.remove('hidden'); else el.classList.add('hidden');
+            lucide.createIcons();
+        }
+
+        function togglePanel(id) {
+            const panel = document.getElementById(id);
+            const panels = ['filter-panel', 'sort-panel', 'columns-panel', 'query-log-panel'];
+            panels.forEach(pId => { if (pId !== id) document.getElementById(pId).classList.add('hidden'); });
+            panel.classList.toggle('hidden');
+
+            if (!panel.classList.contains('hidden')) {
+                //if (id === 'filter-panel' && activeFilters.length === 0) addFilterRow();
+                //if (id === 'sort-panel' && activeSorts.length === 0) addSortRow();
+                if (id === 'columns-panel') renderColumnsPanel();
+                if (id === 'query-log-panel') renderQueryLogs();
+            }
+            lucide.createIcons();
+        }
+
+        // --- SQL Logging Logic ---
+
+        function logQuery(sql) {
+            queryLogs.unshift({ sql, timestamp: new Date().toLocaleTimeString() });
+            if (queryLogs.length > 10) queryLogs.pop();
+            document.getElementById('log-count-text').textContent = `Query Log (${queryLogs.length})`;
+            renderQueryLogs();
+        }
+
+        function renderQueryLogs() {
+            const container = document.getElementById('query-log-list');
+            if (queryLogs.length === 0) {
+                container.innerHTML = `<p class="py-10 text-center opacity-30 italic">No queries executed in this session.</p>`;
+                return;
+            }
+            container.innerHTML = queryLogs.map(log => `
+                <div class="p-2 bg-white/5 rounded border border-white/5 space-y-1">
+                    <div class="flex justify-between items-center opacity-40 text-[8px]">
+                        <span>SUCCESS</span>
+                        <span>${log.timestamp}</span>
+                    </div>
+                    <div class="text-blue-400 font-bold">${log.sql}</div>
+                </div>
+            `).join('');
+        }
+
+        function generateSimulatedSQL(type, table, data = {}, condition = null) {
+            const schema = currentSchema;
+            switch (type) {
+                case 'UPDATE':
+                    const sets = Object.entries(data).map(([k, v]) => `${k} = ${typeof v === 'string' ? `'${v}'` : v}`).join(', ');
+                    return `UPDATE \`${schema}\`.\`${table}\` SET ${sets} WHERE ${condition};`;
+                case 'DELETE':
+                    return `DELETE FROM \`${schema}\`.\`${table}\` WHERE ${condition};`;
+                case 'TRUNCATE':
+                    return `TRUNCATE TABLE \`${schema}\`.\`${table}\`;`;
+                case 'DROP':
+                    return `DROP TABLE \`${schema}\`.\`${table}\`;`;
+            }
+        }
+
+        function executeWithSQLPreview(sql, message, callback, forceConfirmation) {
+            const isPreviewEnabled = document.getElementById('show-sql-checkbox').checked;
+
+            if (!isPreviewEnabled && !forceConfirmation) {
+                logQuery(sql);
+                callback();
+                return;
+            }
+
+            const modal = document.getElementById('confirmModal');
+            const sqlBox = document.getElementById('confirm-sql-box');
+            const wrapper = document.getElementById('confirm-sql-wrapper');
+            const msgEl = document.getElementById('confirm-message');
+            const titleEl = document.getElementById('confirm-title');
+
+            titleEl.textContent = "Preview SQL Execution";
+            msgEl.textContent = message;
+            sqlBox.textContent = sql;
+            wrapper.classList.remove('hidden');
+
+            document.getElementById('confirm-execute-btn').onclick = () => {
+                logQuery(sql);
+                callback();
+                toggleModal('confirmModal', false);
+            };
+
+            toggleModal('confirmModal', true);
+        }
+
+        function showAlert(title, message, cb) {
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            toggleModal('alertPopup', true);
+            document.getElementById('alertPopupAckButton').setAttribute('onclick', `(${cb})(); toggleModal('alertPopup', false)`);
+
+        }
+
+        async function renderSidebar(skipFetch) {
+            const container = document.getElementById('schema-tree');
+            container.innerHTML = '';
+            for (const schemaName of Object.keys(DATABASES)) {
+                const isSelected = schemaName === currentSchema;
+                const doRender = () => {
+                    const schemaEl = document.createElement('div');
+                    schemaEl.innerHTML = `
+                        <button onclick="selectSchema('${schemaName}')" class="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-bold transition-all ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-400 hover:bg-gray-50'}">
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform ${isSelected ? '' : '-rotate-90'}"></i>
+                            <span class="truncate">${schemaName}</span>
+                        </button>
+                        <div class="${isSelected ? 'mt-2 ml-4 space-y-1' : 'hidden'}">
+                            ${DATABASES[schemaName].map(tableName => `
+                                <button style="width: stretch;" onclick="selectTable('${schemaName}', '${tableName}')" class="flex items-center justify-between w-full px-4 py-2 rounded-lg text-xs font-semibold transition-all ${currentTable === tableName ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-100'}">
+                                    <div class="flex items-center gap-2 truncate">
+                                        <i data-lucide="table" class="w-3.5 h-3.5 ${currentTable === tableName ? 'text-blue-400' : 'text-gray-400'}"></i>
+                                        <span>${tableName}</span>
+                                    </div>
+                                </button>
+                            `).join('')}
+                        </div>
+                    `;
+                    container.appendChild(schemaEl);
+                };
+                if (isSelected && !DATABASES[schemaName].length) {
+                    await new Promise((resolve, reject) => {
+                        executeQuery(`SHOW TABLES FROM ${currentSchema}`, (data) => {
+                            DATABASES[currentSchema] = data;
+                            resolve();
+                        });
+                    });
+                }
+                doRender();
+            };
+            lucide.createIcons();
+        }
+
+        function selectSchema(name) {
+            if (currentSchema === name) return;
+            currentSchema = name;
+            renderSidebar();
+        }
+
+        function selectTable(schema, table) {
+            if (schema === currentSchema && table === currentTable) {
+                return;
+            }
+
+            document.getElementById('sort-rows-container').innerHTML = "";
+            document.getElementById("sort-panel").classList.add('hidden');
+            document.getElementById("filter-panel").classList.add('hidden');
+            document.getElementById("columns-panel").classList.add('hidden');
+            document.getElementById("query-log-panel").classList.add('hidden');
+
+            currentSchema = schema;
+            currentTable = table;
+            activeFilters = [];
+            hiddenColumns = [];
+            activeSorts = [];
+            renderSidebar();
+            renderTable();
+        }
+
+        function renderColumnsPanel() {
+            if (!currentTable || !allColumns.length) return;
+            const container = document.getElementById('column-checkboxes-container');
+            container.innerHTML = allColumns.map((col) => `
+                <label class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 cursor-pointer hover:bg-white transition-all">
+                    <input type="checkbox" ${!hiddenColumns.includes(col) ? 'checked' : ''} onchange="toggleColumnVisibility('${col}')" class="rounded text-blue-600">
+                    <span class="text-xs font-bold text-gray-700">${col}</span>
+                </label>
+            `).join('');
+        }
+
+        function toggleColumnVisibility(colName) {
+            if (hiddenColumns.includes(colName)) hiddenColumns = hiddenColumns.filter(c => c !== colName);
+            else hiddenColumns.push(colName);
+            renderTable();
+        }
+
+        function selectAllColumns(visible) {
+            if (visible) hiddenColumns = [];
+            else hiddenColumns = allColumns;
+            renderColumnsPanel();
+            renderTable();
+        }
+
+        function addFilterRow() {
+            if (!currentTable || !allColumns.length) return;
+            const container = document.getElementById('filter-rows-container');
+            const rowId = Date.now();
+            const rowDiv = document.createElement('div');
+            rowDiv.id = `filter-row-${rowId}`;
+            rowDiv.className = 'flex items-center gap-3';
+            rowDiv.innerHTML = `
+                <select class="filter-field flex-1 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
+                    ${allColumns.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+                <select class="filter-op w-40 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
+                    <option value="==">Equals</option>
+                    <option value="contains">Contains</option>
+                </select>
+                <input type="text" placeholder="Value" class="filter-val flex-[2] p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium outline-none">
+                <button onclick="document.getElementById('filter-row-${rowId}').remove()" class="p-2 text-gray-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            `;
+            container.appendChild(rowDiv);
+            lucide.createIcons();
+        }
+
+        function applyFilters() {
+            const rows = document.querySelectorAll('#filter-rows-container > div');
+            activeFilters = Array.from(rows).map(row => ({
+                field: row.querySelector('.filter-field').value,
+                op: row.querySelector('.filter-op').value,
+                val: row.querySelector('.filter-val').value
+            }));
+            renderTable();
+        }
+
+        function clearFilters() {
+            activeFilters = [];
+            document.getElementById('filter-limit').value = 100;
+            document.getElementById('filter-rows-container').innerHTML = '';
+            document.getElementById('filter-panel').classList.add('hidden');
+            renderTable();
+        }
+
+        function addSortRow() {
+            if (!currentTable || !allColumns.length) return;
+            const container = document.getElementById('sort-rows-container');
+            const rowId = Date.now() + Math.random();
+            const rowDiv = document.createElement('div');
+            rowDiv.id = `sort-row-${rowId}`;
+            rowDiv.className = 'flex items-center gap-3';
+            rowDiv.innerHTML = `
+                <select class="sort-field flex-1 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
+                    ${allColumns.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+                <select class="sort-dir w-48 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+                <button onclick="document.getElementById('sort-row-${rowId}').remove()" class="p-2 text-gray-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            `;
+            container.appendChild(rowDiv);
+            lucide.createIcons();
+        }
+
+        function applySorts() {
+            const rows = document.querySelectorAll('#sort-rows-container > div');
+            activeSorts = Array.from(rows).map(row => ({
+                field: row.querySelector('.sort-field').value,
+                dir: row.querySelector('.sort-dir').value
+            }));
+            renderTable();
+        }
+
+        function clearSorts() {
+            activeSorts = [];
+            document.getElementById('sort-rows-container').innerHTML = '';
+            document.getElementById('sort-panel').classList.add('hidden');
+            renderTable();
+        }
+
+        // --- Intercepted Actions ---
+
+        function confirmTruncate() {
+            if (!currentTable) return;
+            const sql = generateSimulatedSQL('TRUNCATE', currentTable);
+            executeWithSQLPreview(sql, `Truncating "${currentTable}" will delete all existing rows.`, () => {
+                DATABASES[currentSchema][currentTable] = [];
+                renderTable();
+            });
+        }
+
+        function confirmDrop() {
+            if (!currentTable) return;
+            const sql = generateSimulatedSQL('DROP', currentTable);
+            executeWithSQLPreview(sql, `Dropping "${currentTable}" will permanently delete the structure and data.`, () => {
+                delete DATABASES[currentSchema][currentTable];
+                currentTable = null;
+                renderTable();
+                renderSidebar();
+            });
+        }
+
+        async function renderTable() {
+            const container = document.getElementById('grid-container');
+            const countText = document.getElementById('record-count');
+            const headerSchema = document.getElementById('header-schema');
+            const headerTable = document.getElementById('header-table');
+
+            document.getElementById('grid-container').innerHTML = ``;
+            if (!currentTable) {
+                headerSchema.textContent = "..."; headerTable.textContent = "...";
+                container.innerHTML = `<div class="h-full flex flex-col items-center justify-center p-20 text-center"><i data-lucide="database" class="w-12 h-12 text-blue-500/20 mb-4"></i><h3 class="text-xl font-bold text-gray-400">Select a Table</h3></div>`;
+                countText.textContent = "0 Records";
+                lucide.createIcons();
+                return;
+            }
+
+            headerSchema.textContent = currentSchema;
+            headerTable.textContent = currentTable;
+            const filterLimit = parseInt(document.getElementById('filter-limit').value ?? "100");
+
+            const totalRecordCount = await new Promise((resolve, reject) => {
+                executeQuery(`SELECT COUNT(*) FROM ${currentSchema}.${currentTable}`, (data) => {
+                    resolve(data[0]);
+                });
+            });
+            tableColumns = await new Promise((resolve, reject) => {
+                executeQuery(`DESCRIBE ${currentSchema}.${currentTable}`, (data) => {
+                    resolve(data);
+                });
+            });
+            allColumns = tableColumns.map((col) => col[0]);
+            const visibleCols = allColumns.filter(c => !hiddenColumns.includes(c));
+
+            const fieldsQuery = visibleCols.length ? visibleCols.map((c) => (`\`${c}\``)).join(", ") : "*";
+            const sortQuery = activeSorts.length ? " ORDER BY " + activeSorts.map((sort) => (`\`${sort.field}\` ${sort.dir}`)).join(", ") : "";
+            executeQuery(`SELECT ${fieldsQuery} FROM ${currentSchema}.${currentTable} ${sortQuery} LIMIT ${filterLimit}`, (data) => {
+                /*activeFilters.forEach(f => {
+                    data = data.filter(row => {
+                        const rowVal = String(row[f.field]).toLowerCase();
+                        const filterVal = f.val.toLowerCase();
+                        return f.op === '==' ? rowVal === filterVal : rowVal.includes(filterVal);
+                    });
+                });*/
+
+                if (activeSorts.length > 0) {
+                    data.sort((a, b) => {
+                        for (let s of activeSorts) {
+                            const valA = a[s.field]; const valB = b[s.field];
+                            if (valA === valB) continue;
+                            const factor = s.dir === 'asc' ? 1 : -1;
+                            return (valA < valB ? -1 : 1) * factor;
+                        }
+                        return 0;
+                    });
+                }
+
+                countText.textContent = `Showing ${Math.min(filterLimit, totalRecordCount)} of ${totalRecordCount}`;
+
+                container.innerHTML = `
+                    <table class="w-full text-left border-collapse min-w-max">
+                        <thead class="sticky top-0 bg-white border-b border-gray-100 z-10 shadow-sm">
+                            <tr>
+                                <th class="w-12 px-6 py-4"><input type="checkbox" class="rounded text-blue-600"></th>
+                                ${visibleCols.map(c => `<th class="px-6 py-4 text-[10px] font-black uppercase text-gray-400 tracking-[0.15em] border-r border-gray-50">${c}</th>`).join('')}
+                                <th class="px-6 py-4 text-center text-[10px] font-black uppercase text-gray-400 tracking-widest">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            ${data.map((row, idx) => `
+                                <tr class="hover:bg-blue-50/30 group">
+                                    <td class="px-6 py-4"><input type="checkbox" class="rounded text-blue-600"></td>
+                                    ${visibleCols.map((c, idx2) => `<td class="px-6 py-4 text-sm font-medium text-gray-600 border-r border-gray-50/50">${typeof row[idx2] === 'number' ? `<span class="font-mono text-blue-600 font-bold">${row[idx2]}</span>` : row[idx2]}</td>`).join('')}
+                                    <td class="px-6 py-4 text-center">
+                                        <div class="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                            <button onclick='openRowModal(${JSON.stringify(row)})' class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+                                            <button onclick='deleteRow(${JSON.stringify(row)})' class="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${data.length === 0 ? '<div class="h-full flex flex-col items-center justify-center p-20 text-center"><i data-lucide="search-x" class="w-12 h-12 text-gray-200 mb-4"></i><h3 class="font-bold text-gray-400">No results found</h3></div>' : ""}
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function openRowModal(row) {
+            const container = document.getElementById('row-form-fields');
+            const title = document.getElementById('row-modal-title');
+            const btnText = document.getElementById('row-modal-btn');
+            container.innerHTML = '';
+
+            if (row === null) {
+                title.textContent = 'Add Record'; btnText.textContent = 'Create';
+                editingData = { isNew: true };
+                tableColumns.forEach((column) => addField(container, column, ''));
+            } else {
+                title.textContent = 'Edit Record'; btnText.textContent = 'Update';
+                editingData = { isNew: false };
+                tableColumns.forEach((column, index) => addField(container, column, row[index]));
+            }
+
+            document.getElementById('row-modal-execute-btn').onclick = saveRow;
+            toggleModal('rowModal', true);
+        }
+
+        function getFieldInput(type) {
+            if (type === "date") return "date";
+            if (type === "time") return "time";
+            if (type === "datetime") return "datetime-local";
+            if (type === "int" || type === "bigint" || type === "smallint") return "number";
+            return "text";
+        }
+
+        function addField(container, column, value) {
+            const div = document.createElement('div');
+            let attrs = [];
+            let required = true;
+            const name = column[0];
+            const type = column[1];
+            const func = column[4];
+            const fifthFlag = column[5];
+            const notNull = column[2] === "NO";
+            const executableFunc = func && fifthFlag.startsWith("DEFAULT_GENERATED");
+
+            if (!notNull) required = false;
+            if (column[3] === "PRI") {
+                attrs.push("PRIMARY KEY");
+            }
+            if (fifthFlag === "auto_increment" || executableFunc) {
+                required = false;
+                if (fifthFlag === "auto_increment") attrs.push("AUTO INCREMENT");
+            }
+            if (!value && func && !executableFunc) {
+                value = func;
+            }
+            if (`${value}`.includes("T") && `${value}`.includes("+")) value = value.split("+")[0];
+
+            div.innerHTML = `
+                <label class="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">${name} ${attrs.length ? '(' + attrs.join(", ") + ')' : ""} ${required ? '<span style=\'color: red;\'>*</span>' : ''}</label>
+                <div class="flex gap-2">
+                    ${(type === "text" || type === "json")
+                    ? `<textarea id="input-${name}" data-key="${name}" class="row-input w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium text-sm">${value}</textarea>`
+                    : `<input type="${getFieldInput(type)}" id="input-${name}" data-key="${name}" value="${value}" class="row-input w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-medium text-sm">`}
+                    ${executableFunc ? `
+                        <button type="button" onclick="handleInputPlayAction('${name}', '${func}')" class="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all flex items-center justify-center shrink-0 shadow-lg shadow-blue-100">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function handleInputPlayAction(name, executableFunc) {
+            executeQuery(`SELECT ${executableFunc}`, (data) => {
+                if (!data.length) return;
+                let value = data[0];
+                if (`${value}`.includes("T") && `${value}`.includes("+")) value = value.split("+")[0];
+                document.getElementById(`input-${name}`).value = value;
+            });
+        }
+
+        function saveRow() {
+            const inputs = document.querySelectorAll('.row-input');
+            const formData = {};
+            inputs.forEach(input => {
+                const key = input.getAttribute('data-key');
+                const val = input.value;
+                if (val === "") return;
+                if (input.type === "number") {
+                    formData[key] = Number(val);
+                } else {
+                    formData[key] = `'${val}'`;
+                }
+            });
+
+            let sql;
+            const pkField = Object.keys(formData)[0] ?? 'id';
+
+            if (editingData.isNew) {
+                sql = `INSERT INTO \`${currentSchema}\`.\`${currentTable}\` (${Object.keys(formData).join(', ')}) VALUES (${Object.values(formData).map(v => v).join(', ')})`;
+            } else {
+                const sets = Object.entries(formData).map(([k, v]) => `${k} = ${v}`).join(', ');
+                sql = `UPDATE \`${currentSchema}\`.\`${currentTable}\` SET ${sets} WHERE ${pkField} = ${typeof formData[pkField] === 'string' ? `'${formData[pkField]}'` : formData[pkField]}`;
+            }
+
+            executeQuery(sql, (data) => {
+                console.log("Barmoury Data Studio:", "SAVE/UPDATE EXECUTION RESULT RESULT", data);
+                toggleModal('rowModal', false);
+                renderTable();
+            }, (error, responseBody) => {
+                showAlert(error, responseBody, () => { });
+            }, undefined, true);
+        }
+
+        function deleteRow(idx) {
+            const row = DATABASES[currentSchema][currentTable][idx];
+            const sql = generateSimulatedSQL('DELETE', currentTable, {}, `${Object.keys(row)[0]} = ${Object.values(row)[0]}`);
+
+            executeWithSQLPreview(sql, `Are you sure you want to delete this specific record from "${currentTable}"?`, () => {
+                DATABASES[currentSchema][currentTable].splice(idx, 1);
+                renderTable();
+            });
+        }
+
+        // --- HTTP REQUESTS ---
+
+        async function askParentForData(requestPayload, timeoutMs) {
+            return new Promise((resolve, reject) => {
+                let cancelled = false;
+                const channel = new MessageChannel();
+                const timeoutId = setTimeout(() => {
+                    cancelled = true;
+                    channel.port1.close();
+                    reject(new Error("Timeout waiting for post message response"));
+                }, timeoutMs);
+
+                channel.port1.onmessage = (event) => {
+                    clearTimeout(timeoutId);
+                    channel.port1.close();
+                    if (!cancelled) resolve(event.data);
+                };
+                window.parent.postMessage(
+                    { type: "BDS_BUS_REQUEST", payload: requestPayload },
+                    "*",
+                    [channel.port2]
+                );
+            });
+        }
+
+        async function executeQuery(query, success, failure, completes, forceConfirmation) {
+            executeWithSQLPreview(query, `Are you sure you want to execute this query?`, async () => {
+                if (!failure) {
+                    failure = (error, responseBody) => {
+                        showAlert(error, responseBody, () => {
+                            toggleModal('setupModal', true);
+                        });
+                    };
+                }
+                if (!completes) {
+                    toggleModal('executingModal', true);
+                    completes = () => toggleModal('executingModal', false);
+                }
+                let headers = {
+                    ...CONFIG.headers
+                };
+                if (CONFIG.postMessageKey) {
+                    try {
+                        const result = await askParentForData(JSON.stringify({ query, key: CONFIG.postMessageKey, action: "REQUEST_HEADER" }), 10 * 1000);
+                        headers = { ...headers, ...result };
+                    } catch (err) {
+                        console.warn("Barmoury Data Studio:", err);
+                    }
+                }
+                //window.parent.postMessage({ payload: query, type: "QUERY_HEADER_REQUEST", }, "*");
+                ffs.post(CONFIG.queryRoute, { query }, { headers }).then(({ data: { data } }) => success(data)).catch((error) => {
+                    console.error("Barmoury Data Studio:", error, error.response);
+                    failure(error, error?.response?.data?.message ?? `${error}`);
+                }).finally(completes);
+            }, forceConfirmation);
+        }
+
+        // --- GENERIC ---
+
+        window.onload = () => {
+            lucide.createIcons();
+
+            setTimeout(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const fields = {
+                    headers: ["setup-headers", "headers"],
+                    databases: ["setup-databases", "databases"],
+                    queryroute: ["setup-query-route", "queryRoute"],
+                    postmessagekey: ["setup-post-message-key", "postMessageKey"],
+                };
+                Object.entries(fields).forEach(([field, [inputId, configId]]) => {
+                    const value = urlParams.get(field);
+                    const inputElement = document.getElementById(inputId);
+                    if (value && inputElement) {
+                        inputElement.value = value;
+                        CONFIG[configId] = (field === "databases" ? value : value.split(",").filter((s) => !!s));
+                    }
+                });
+                toggleModal('loadingScreen', false);
+                if (CONFIG.queryRoute && CONFIG.postMessageKey) {
+                    handleSetup();
+                } else {
+                    toggleModal('setupModal', true);
+                }
+                lucide.createIcons();
+            }, 500);
+        };
+
+        // --- BUS ---
+
+        window.addEventListener("message", (event) => {
+            if (event.data.type === "BDS_QUERY_HEADER_RESULT") {
+                console.log("Barmoury Data Studio:111", "Iframe received result:", event.data.result);
+            }
+        });
+    </script>
+</body>
+
+</html>
