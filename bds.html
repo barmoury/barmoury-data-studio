@@ -1036,11 +1036,13 @@
                 let headers = {
                     ...CONFIG.headers
                 };
-                try {
-                    const result = await askParentForData(JSON.stringify({ query, key: CONFIG.postMessageKey, action: "REQUEST_HEADER" }), 10 * 1000);
-                    headers = { ...headers, ...result };
-                } catch (err) {
-                    console.warn("Barmoury Data Studio:", err);
+                if (CONFIG.postMessageKey) {
+                    try {
+                        const result = await askParentForData(JSON.stringify({ query, key: CONFIG.postMessageKey, action: "REQUEST_HEADER" }), 10 * 1000);
+                        headers = { ...headers, ...result };
+                    } catch (err) {
+                        console.warn("Barmoury Data Studio:", err);
+                    }
                 }
                 //window.parent.postMessage({ payload: query, type: "QUERY_HEADER_REQUEST", }, "*");
                 ffs.post(CONFIG.queryRoute, { query }, { headers }).then(({ data: { data } }) => success(data)).catch((error) => {
