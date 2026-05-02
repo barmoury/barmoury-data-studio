@@ -10,6 +10,7 @@
     const studioFrame = document.getElementById(url.searchParams.get('frameid'));
     const bdsHtmlUrl = url.searchParams.get('bdshtml') ?? `${pathOnly}/bds.html`;
     studioFrame.src = bdsHtmlUrl + "?" + (new URLSearchParams({
+        tables: url.searchParams.get('tables') ?? "",
         databases: url.searchParams.get('databases') ?? "",
         queryroute: url.searchParams.get('queryroute') ?? "",
         postmessagekey: url.searchParams.get('postmessagekey') ?? "",
