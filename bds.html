@@ -133,6 +133,12 @@
                     </div>
                     <div>
                         <label
+                            class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Tables</label>
+                        <input id="setup-tables" type="text" placeholder="e.g. table1,table2. leave empty for all"
+                            class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-medium text-sm">
+                    </div>
+                    <div>
+                        <label
                             class="block text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Databases</label>
                         <input id="setup-databases" type="text" placeholder="e.g. schema1,scheme2. leave empty for all"
                             class="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-200 transition-all font-medium text-sm">
@@ -253,9 +259,20 @@
                         </button>
                     </div>
                     <div class="flex items-center gap-4 shrink-0">
-                        <span id="record-count"
-                            class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">...</span>
-                        <button
+                        <!-- Pagination + Record Count -->
+                        <div class="flex items-center gap-1">
+                            <button onclick="changePage(-1)" id="prev-page-btn"
+                                class="p-1.5 hover:bg-white rounded-md text-gray-400 border border-transparent hover:border-gray-200 disabled:opacity-20 transition-all">
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            </button>
+                            <span id="record-count"
+                                class="text-[10px] font-bold text-gray-400 tracking-widest uppercase mx-1">...</span>
+                            <button onclick="changePage(1)" id="next-page-btn"
+                                class="p-1.5 hover:bg-white rounded-md text-gray-400 border border-transparent hover:border-gray-200 disabled:opacity-20 transition-all">
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <button onclick="openExportModal()"
                             class="p-1.5 hover:bg-white rounded-md text-gray-400 border border-transparent hover:border-gray-200"><i
                                 data-lucide="download" class="w-4 h-4"></i></button>
                     </div>
@@ -382,6 +399,31 @@
         </div>
     </div>
 
+    <!-- Export Modal -->
+    <div id="exportModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-pop border border-gray-100">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between font-bold">
+                <span>Export to CSV</span>
+                <button onclick="toggleModal('exportModal', false)"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <p class="text-xs text-gray-500">Select the fields you want to include in the exported file.</p>
+                <div id="export-columns-container"
+                    class="flex flex-wrap gap-3 max-h-[40vh] overflow-y-auto px-1 custom-scrollbar">
+                    <!-- Column checkboxes injected here -->
+                </div>
+                <div class="flex items-center gap-3 pt-4 border-t border-gray-50">
+                    <button onclick="toggleModal('exportModal', false)"
+                        class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-800">Cancel</button>
+                    <button onclick="exportToCSV()"
+                        class="flex-1 py-3 bg-blue-600 text-white rounded-xl text-sm font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i> Start Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Universal Confirm Modal (Updated for SQL Preview) -->
     <div id="confirmModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4 modal-backdrop">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-pop">
@@ -432,7 +474,9 @@
     <script>
         const DATABASES = {};
 
+        let currentPage = 1;
         let queryLogs = [];
+        let activeData = [];
         let allColumns = [];
         let activeSorts = [];
         let tableColumns = [];
@@ -441,14 +485,16 @@
         let activeFilters = [];
         let hiddenColumns = [];
         let currentSchema = '';
+        let tableChanged = true;
         let sidebarCollapsed = false;
 
-        let CONFIG = { databases: [], queryRoute: '', postMessageKey: '', headers: {} };
+        let CONFIG = { tables: [], databases: [], queryRoute: '', postMessageKey: '', headers: {} };
 
         async function handleSetup(event) {
             if (event) event.preventDefault();
             CONFIG.queryRoute = document.getElementById('setup-query-route').value;
             CONFIG.postMessageKey = document.getElementById('setup-post-message-key').value;
+            CONFIG.tables = document.getElementById('setup-tables').value.split(",").filter((s) => !!s);
             CONFIG.databases = document.getElementById('setup-databases').value.split(",").filter((s) => !!s);
             try {
                 CONFIG.headers = JSON.parse(document.getElementById('setup-headers').value || '{}');
@@ -469,6 +515,7 @@
                 document.getElementById('main-app-container').classList.remove('hidden');
                 document.getElementById('setup-cancel-btn').classList.remove('hidden');
                 document.getElementById("footer-connection-status").innerText = (new URL(CONFIG.queryRoute)).hostname;
+                if (CONFIG.tables.length > 0) currentTable = CONFIG.tables[0];
                 init();
             }, (error, responseBody) => {
                 showAlert("Initialization error: " + error, responseBody, () => {
@@ -487,6 +534,7 @@
 
         function openSettings() {
             document.getElementById('setup-query-route').value = CONFIG.queryRoute;
+            document.getElementById('setup-tables').value = CONFIG.tables.join(",");
             document.getElementById('setup-databases').value = CONFIG.databases.join(",");
             document.getElementById('setup-post-message-key').value = CONFIG.postMessageKey;
             document.getElementById('setup-headers').value = JSON.stringify(CONFIG.headers, null, 2);
@@ -527,7 +575,7 @@
 
         function logQuery(sql) {
             queryLogs.unshift({ sql, timestamp: new Date().toLocaleTimeString() });
-            if (queryLogs.length > 10) queryLogs.pop();
+            if (queryLogs.length > 300) queryLogs.pop();
             document.getElementById('log-count-text').textContent = `Query Log (${queryLogs.length})`;
             renderQueryLogs();
         }
@@ -547,21 +595,6 @@
                     <div class="text-blue-400 font-bold">${log.sql}</div>
                 </div>
             `).join('');
-        }
-
-        function generateSimulatedSQL(type, table, data = {}, condition = null) {
-            const schema = currentSchema;
-            switch (type) {
-                case 'UPDATE':
-                    const sets = Object.entries(data).map(([k, v]) => `${k} = ${typeof v === 'string' ? `'${v}'` : v}`).join(', ');
-                    return `UPDATE \`${schema}\`.\`${table}\` SET ${sets} WHERE ${condition};`;
-                case 'DELETE':
-                    return `DELETE FROM \`${schema}\`.\`${table}\` WHERE ${condition};`;
-                case 'TRUNCATE':
-                    return `TRUNCATE TABLE \`${schema}\`.\`${table}\`;`;
-                case 'DROP':
-                    return `DROP TABLE \`${schema}\`.\`${table}\`;`;
-            }
         }
 
         function executeWithSQLPreview(sql, message, callback, forceConfirmation) {
@@ -629,7 +662,7 @@
                 if (isSelected && !DATABASES[schemaName].length) {
                     await new Promise((resolve, reject) => {
                         executeQuery(`SHOW TABLES FROM ${currentSchema}`, (data) => {
-                            DATABASES[currentSchema] = data;
+                            DATABASES[currentSchema] = data.filter((table) => !CONFIG.tables?.length || CONFIG.tables.includes(table));
                             resolve();
                         });
                     });
@@ -642,7 +675,9 @@
         function selectSchema(name) {
             if (currentSchema === name) return;
             currentSchema = name;
+            tableChanged = true;
             renderSidebar();
+            currentPage = 1;
         }
 
         function selectTable(schema, table) {
@@ -658,9 +693,11 @@
 
             currentSchema = schema;
             currentTable = table;
+            tableChanged = true;
             activeFilters = [];
             hiddenColumns = [];
             activeSorts = [];
+            currentPage = 1;
             renderSidebar();
             renderTable();
         }
@@ -689,6 +726,32 @@
             renderTable();
         }
 
+        const queryLogicMap = [
+            ["Equals", "="],
+            ["Not Equals", "!="],
+            ["Contains", "LIKE", (value) => `'%${value}%'`],
+            ["Does Not Contain", "NOT LIKE", (value) => `'%${value}%'`],
+            ["Starts With", "LIKE", (value) => `'${value}%'`],
+            ["Ends With", "LIKE", (value) => `'%${value}'`],
+            ["Greater Than", ">"],
+            ["Less Than", "<"],
+            ["Greater or Equal", ">="],
+            ["Less or Equal", "<="],
+            ["Between", "BETWEEN"],
+            ["In List", "IN", (value) => "(" + value.replaceAll("\\,", "[::::]").split(",").map((v) => `'${v}'`).join(", ").replaceAll("[::::]", ",") + ")"],
+            ["Not In List", "NOT IN", (value) => "(" + value.replaceAll("\\,", "[::::]").split(",").map((v) => `'${v}'`).join(", ").replaceAll("[::::]", ",") + ")"],
+            ["Is Empty", "IS NULL", (v) => ""],
+            ["Is Not Empty", "IS NOT NULL", (v) => ""],
+            ["On", "="],
+            ["Not On", "!="],
+            ["Before", "<"],
+            ["After", ">"],
+            ["On or Before", "<="],
+            ["On or After", ">="],
+            ["Is True", "="],
+            ["Is False", "="]
+        ];
+
         function addFilterRow() {
             if (!currentTable || !allColumns.length) return;
             const container = document.getElementById('filter-rows-container');
@@ -698,11 +761,10 @@
             rowDiv.className = 'flex items-center gap-3';
             rowDiv.innerHTML = `
                 <select class="filter-field flex-1 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
-                    ${allColumns.map(c => `<option value="${c}">${c}</option>`).join('')}
+                    ${tableColumns.map(([name, type]) => `<option value="${name}:::${type}">${name}</option>`).join('')}
                 </select>
                 <select class="filter-op w-40 p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold outline-none">
-                    <option value="==">Equals</option>
-                    <option value="contains">Contains</option>
+                    ${queryLogicMap.map((q) => `<option value="${q[1]}">${q[0]}</option>`)}
                 </select>
                 <input type="text" placeholder="Value" class="filter-val flex-[2] p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium outline-none">
                 <button onclick="document.getElementById('filter-row-${rowId}').remove()" class="p-2 text-gray-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
@@ -713,15 +775,28 @@
 
         function applyFilters() {
             const rows = document.querySelectorAll('#filter-rows-container > div');
-            activeFilters = Array.from(rows).map(row => ({
-                field: row.querySelector('.filter-field').value,
-                op: row.querySelector('.filter-op').value,
-                val: row.querySelector('.filter-val').value
-            }));
+            activeFilters = Array.from(rows).map(row => {
+                let op = row.querySelector('.filter-op').value;
+                let val = row.querySelector('.filter-val').value;
+                let [field, type] = row.querySelector('.filter-field').value.split(":::");
+
+                const queryLogic = queryLogicMap.find((log) => log[1] === op);
+                if (queryLogic.length > 2) {
+                    val = queryLogic[2](val);
+                } else if (typeof val !== "number") {
+                    val = `'${val}'`;
+                }
+
+                return {
+                    op, type, field, val,
+                };
+            });
+            currentPage = 1;
             renderTable();
         }
 
         function clearFilters() {
+            currentPage = 1;
             activeFilters = [];
             document.getElementById('filter-limit').value = 100;
             document.getElementById('filter-rows-container').innerHTML = '';
@@ -770,29 +845,32 @@
 
         function confirmTruncate() {
             if (!currentTable) return;
-            const sql = generateSimulatedSQL('TRUNCATE', currentTable);
-            executeWithSQLPreview(sql, `Truncating "${currentTable}" will delete all existing rows.`, () => {
-                DATABASES[currentSchema][currentTable] = [];
+            executeQuery(`TRUNCATE ${currentSchema}.${currentTable}`, (data) => {
                 renderTable();
-            });
+            }, undefined, undefined, true, `Truncating "${currentSchema}.${currentTable}" will delete all existing rows.`);
         }
 
         function confirmDrop() {
             if (!currentTable) return;
-            const sql = generateSimulatedSQL('DROP', currentTable);
-            executeWithSQLPreview(sql, `Dropping "${currentTable}" will permanently delete the structure and data.`, () => {
-                delete DATABASES[currentSchema][currentTable];
-                currentTable = null;
+            executeQuery(`DROP ${currentSchema}.${currentTable}`, (data) => {
                 renderTable();
                 renderSidebar();
-            });
+            }, undefined, undefined, true, `Dropping "${currentSchema}.${currentTable}" will permanently delete the structure and data.`);
+        }
+
+        function changePage(offset) {
+            currentPage += offset;
+            renderTable();
         }
 
         async function renderTable() {
-            const container = document.getElementById('grid-container');
-            const countText = document.getElementById('record-count');
+            activeData = [];
             const headerSchema = document.getElementById('header-schema');
+            const container = document.getElementById('grid-container');
             const headerTable = document.getElementById('header-table');
+            const countText = document.getElementById('record-count');
+            const prevBtn = document.getElementById('prev-page-btn');
+            const nextBtn = document.getElementById('next-page-btn');
 
             document.getElementById('grid-container').innerHTML = ``;
             if (!currentTable) {
@@ -807,43 +885,40 @@
             headerTable.textContent = currentTable;
             const filterLimit = parseInt(document.getElementById('filter-limit').value ?? "100");
 
-            const totalRecordCount = await new Promise((resolve, reject) => {
-                executeQuery(`SELECT COUNT(*) FROM ${currentSchema}.${currentTable}`, (data) => {
-                    resolve(data[0]);
+            if (tableChanged) {
+                tableColumns = await new Promise((resolve, reject) => {
+                    executeQuery(`DESCRIBE ${currentSchema}.${currentTable}`, (data) => {
+                        resolve(data);
+                    });
                 });
-            });
-            tableColumns = await new Promise((resolve, reject) => {
-                executeQuery(`DESCRIBE ${currentSchema}.${currentTable}`, (data) => {
-                    resolve(data);
-                });
-            });
+                tableChanged = false;
+            }
             allColumns = tableColumns.map((col) => col[0]);
             const visibleCols = allColumns.filter(c => !hiddenColumns.includes(c));
 
             const fieldsQuery = visibleCols.length ? visibleCols.map((c) => (`\`${c}\``)).join(", ") : "*";
             const sortQuery = activeSorts.length ? " ORDER BY " + activeSorts.map((sort) => (`\`${sort.field}\` ${sort.dir}`)).join(", ") : "";
-            executeQuery(`SELECT ${fieldsQuery} FROM ${currentSchema}.${currentTable} ${sortQuery} LIMIT ${filterLimit}`, (data) => {
-                /*activeFilters.forEach(f => {
-                    data = data.filter(row => {
-                        const rowVal = String(row[f.field]).toLowerCase();
-                        const filterVal = f.val.toLowerCase();
-                        return f.op === '==' ? rowVal === filterVal : rowVal.includes(filterVal);
-                    });
-                });*/
+            const filterQuery = activeFilters.length ? " WHERE " + activeFilters.map((filter) => (`\`${filter.field}\` ${filter.op} ${filter.val}`)).join(" AND ") : "";
 
-                if (activeSorts.length > 0) {
-                    data.sort((a, b) => {
-                        for (let s of activeSorts) {
-                            const valA = a[s.field]; const valB = b[s.field];
-                            if (valA === valB) continue;
-                            const factor = s.dir === 'asc' ? 1 : -1;
-                            return (valA < valB ? -1 : 1) * factor;
-                        }
-                        return 0;
-                    });
-                }
+            const totalRecordCount = await new Promise((resolve, reject) => {
+                executeQuery(`SELECT COUNT(*) FROM ${currentSchema}.${currentTable} ${filterQuery}`, (data) => {
+                    resolve(data[0]);
+                });
+            });
 
-                countText.textContent = `Showing ${Math.min(filterLimit, totalRecordCount)} of ${totalRecordCount}`;
+            const totalPages = filterLimit > 0 ? Math.ceil(totalRecordCount / filterLimit) : 1;
+
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+
+            const offset = (currentPage - 1) * filterLimit;
+            const limitStr = filterLimit > 0 ? `LIMIT ${filterLimit}${offset > 0 ? ' OFFSET ' + offset : ''}` : '';
+
+            executeQuery(`SELECT ${fieldsQuery} FROM ${currentSchema}.${currentTable} ${filterQuery} ${sortQuery} ${limitStr}`, (data) => {
+                activeData = data;
+                countText.textContent = `Showing ${Math.min(filterLimit, data.length)} of ${totalRecordCount} (Page ${currentPage} of ${totalPages})`;
 
                 container.innerHTML = `
                     <table class="w-full text-left border-collapse min-w-max">
@@ -985,14 +1060,68 @@
             }, undefined, true);
         }
 
-        function deleteRow(idx) {
-            const row = DATABASES[currentSchema][currentTable][idx];
-            const sql = generateSimulatedSQL('DELETE', currentTable, {}, `${Object.keys(row)[0]} = ${Object.values(row)[0]}`);
-
-            executeWithSQLPreview(sql, `Are you sure you want to delete this specific record from "${currentTable}"?`, () => {
-                DATABASES[currentSchema][currentTable].splice(idx, 1);
+        function deleteRow(row) {
+            executeQuery(`DELETE FROM ${currentSchema}.${currentTable} WHERE ${allColumns[0]} = '${row[0]}'`, (data) => {
                 renderTable();
+            }, undefined, undefined, true, `Are you sure you want to delete this specific record from "${currentSchema}.${currentTable}"?`);
+        }
+
+
+
+        // --- Export Logic ---
+        function openExportModal() {
+            if (!currentTable) return;
+            const container = document.getElementById('export-columns-container');
+
+            container.innerHTML = allColumns.map((col, index) => `
+                <label class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 cursor-pointer hover:bg-white transition-all grow basis-[120px]">
+                    <input type="checkbox" value="${col}:::${index}" checked class="export-col-checkbox rounded text-blue-600 focus:ring-blue-500">
+                    <span class="text-xs font-bold text-gray-700 truncate">${col}</span>
+                </label>
+            `).join('');
+
+            toggleModal('exportModal', true);
+        }
+
+        // --- Export Logic ---
+
+        function exportToCSV() {
+            const checkboxes = document.querySelectorAll('.export-col-checkbox:checked');
+            const selectedCols = Array.from(checkboxes).map(cb => cb.value.split(":::"));
+
+            if (selectedCols.length === 0) {
+                showAlert("Selection Required", "Please select at least one column to export.");
+                return;
+            }
+
+            // Create CSV content
+            let csvContent = selectedCols.map((col) => col[0]).join(',') + '\n';
+
+            activeData.forEach((row) => {
+                const line = selectedCols.map(([col, index]) => {
+                    let val = String(row[index] ?? '');
+                    // Escape quotes and commas
+                    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                        val = `"${val.replace(/"/g, '""')}"`;
+                    }
+                    return val;
+                });
+                csvContent += line.join(',') + '\n';
             });
+
+            // Create Blob and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${currentSchema}_${currentTable}_export_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toggleModal('exportModal', false);
+            logQuery(`-- Exported ${activeData.length} records to CSV`);
         }
 
         // --- HTTP REQUESTS ---
@@ -1020,8 +1149,8 @@
             });
         }
 
-        async function executeQuery(query, success, failure, completes, forceConfirmation) {
-            executeWithSQLPreview(query, `Are you sure you want to execute this query?`, async () => {
+        async function executeQuery(query, success, failure, completes, forceConfirmation, customMessage) {
+            executeWithSQLPreview(query, (customMessage ? customMessage : `Are you sure you want to execute this query?`), async () => {
                 if (!failure) {
                     failure = (error, responseBody) => {
                         showAlert(error, responseBody, () => {
@@ -1060,6 +1189,7 @@
             setTimeout(() => {
                 const urlParams = new URLSearchParams(window.location.search);
                 const fields = {
+                    tables: ["setup-tables", "tables"],
                     headers: ["setup-headers", "headers"],
                     databases: ["setup-databases", "databases"],
                     queryroute: ["setup-query-route", "queryRoute"],
